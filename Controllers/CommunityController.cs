@@ -21,9 +21,52 @@ namespace Reddit.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Community>>> GetCommunities()
+        public async Task<ActionResult<IEnumerable<Community>>> GetCommunities(int pageNumber, int pageSize, string sortTerm = "id", bool isAssending = true, string searchKey = null)
         {
-            return await _context.Communities.ToListAsync();
+            var orderBy = string.IsNullOrWhiteSpace(sortTerm) ? "id" : sortTerm.ToLower();
+
+            var query = _context.Communities.AsQueryable();
+
+     
+            if (!string.IsNullOrWhiteSpace(searchKey))
+            {
+                query = query.Where(c => c.Name.Contains(searchKey) || c.Description.Contains(searchKey));
+            }
+    
+            var communities = query.Select(c => new
+            {
+                Community = c,
+                PostsCount = c.Posts.Count(),
+                SubscribersCount = c.Subscribers.Count()
+            });
+         
+            switch (orderBy)
+            {
+                case "createdat":
+                    communities = isAssending ?
+                        communities.OrderBy(c => c.Community.CreateAt) :
+                        communities.OrderByDescending(c => c.Community.CreateAt);
+                    break;
+                case "postscount":
+                    communities = isAssending ?
+                        communities.OrderBy(c => c.PostsCount) :
+                        communities.OrderByDescending(c => c.PostsCount);
+                    break;
+                case "subscriberscount":
+                    communities = isAssending ?
+                        communities.OrderBy(c => c.SubscribersCount) :
+                        communities.OrderByDescending(c => c.SubscribersCount);
+                    break;
+                case "id":
+                default:
+                    communities = isAssending ?
+                        communities.OrderBy(c => c.Community.Id) :
+                        communities.OrderByDescending(c => c.Community.Id);
+                    break;
+            }
+         
+            var pagedCommunities = await communities.Skip((pageNumber - 1) * pageSize).Take(pageSize).Select(c => c.Community).ToListAsync();
+            return pagedCommunities;
         }
 
         [HttpGet("{id}")]
